@@ -1,84 +1,46 @@
-# Metodología de ruteo capacitado sensible a zonas de conflicto
+# Metodología computacional: CVRP multipenalización y extensión vial
 
-## 1. Problema de investigación
+## Modelo de referencia (Modo A)
 
-El CVRP determina un conjunto de circuitos que comienzan y terminan en un depósito, visitan cada cliente una sola vez y respetan la capacidad vehicular. La aplicación contrasta una estrategia de minimización de distancia con una estrategia de minimización de **costo generalizado** que incorpora la longitud transitada por áreas de riesgo espacial.
+Fuente metodológica: manuscrito facilitado *A Novel Heuristic Approach for Simplifying Urban Risk Zones in Distribution Route Planning* (Aguirre-Ibarra et al.). El módulo representa el problema **capacitado estático** con restricciones de asignación, conservación de flujo y capacidad, no un DVRP con reoptimización temporal.
 
-Las regiones de riesgo son polígonos exploratorios derivados de K-Means y de sus empalmes geométricos. No son tasas de riesgo ni frecuencias de accidentes/robos esperadas. Son **supuestos geométricos de modelado**, verificables pero no equivalentes a peligrosidad estadísticamente validada.
+Se utiliza un Excel con incidentes georreferenciados por tipo de riesgo. Primero se aplican K-Means individuales; después se obtienen hulls poligonales de los clústeres y sus intersecciones entre categorías de riesgo distintas. Cada polígono de intersección se transforma en un círculo circunscrito con el centroide del empalme y el radio máximo desde el centroide a sus vértices. Una variante exploratoria puede calcular empalmes directamente de círculos de clúster, pero no es la opción por defecto.
 
-## 2. Notación y objetivo
+Los nodos del CVRP son clientes y un depósito. Distancia Haversine entre coordenadas WGS84. Secante geométrica evaluada en la proyección UTM en metros, con las zonas circulares generadas. Sea `delta_ijk=1` si el segmento `ij` corta el interior de la zona `k`, y `gamma_i^k=1` si el cliente `i` está dentro del círculo. El costo de arco es:
 
-- `V={0,...,n}`: depósito `0` y clientes `1..n`.
-- `K`: número máximo de vehículos homogéneos.
-- `q_i`: demanda del cliente `i`.
-- `Q`: capacidad de cada vehículo.
-- `d_ij(λ)`: longitud física del trayecto entre `i` y `j` seleccionado por la matriz OD.
-- `e_ij(λ)`: longitud de ese mismo trayecto dentro de las zonas seleccionadas.
-- `c_ij(λ)=d_ij(λ)+λ e_ij(λ)`: costo generalizado, expresado en metros equivalentes.
-- `x_ij^k∈{0,1}`: uso del arco de conexión entre nodos `i` y `j` por vehículo `k`.
+```text
+c_ij = d_ij * (1 + lambda * sum_k [delta_ijk * (1-max(gamma_i^k,gamma_j^k))])
+```
 
-Objetivo: minimizar `sum_k sum_i sum_j c_ij(λ) * x_ij^k` sujeto a cobertura de todos los clientes, conservación de flujo por vehículo, regreso al depósito, eliminación de subtours y `sum_i q_i * y_i^k <= Q`. Los operadores implementados representan rutas como listas de clientes y verifican cobertura y capacidad explícitamente antes de devolver la solución.
+Esta regla conserva la factibilidad de clientes situados en la zona. Un arco puede cortar físicamente un círculo y estar exento de penalización por alguno de sus extremos; por eso se registran cruces y penalizaciones por separado. Cuando lambda=0 hay interacciones geométricas pero **no** penalizaciones aplicadas. La exposición métrica reportada es longitud de línea recta dentro de la unión de círculos; no entra en el costo de este modo.
 
-Una penalización `λ=0` equivale a minimizar distancia; con `λ>0` se intercambia recorrido adicional por menos exposición. La función no contiene probabilidades de accidente, costos monetarios ni tiempo de tránsito porque los datos actuales no permiten estimarlos.
+## Extensión vial (Modo B)
 
-## 3. Dos modos de cálculo de distancia
+La red vial se recibe en GeoJSON WGS84; cada segmento debe tener vértices de intersección conectados. Se proyecta a UTM y se construye un grafo de aristas dirigidas, respetando propiedad `oneway` simple cuando existe. Dijkstra obtiene caminos mínimos para cada par de nodos bajo:
 
-### (A) Geometría recta — prototipo exclusivamente ilustrativo
+```text
+w_e = longitud_e + lambda * longitud_e_dentro_de_union_de_circulos
+```
 
-Convierte los puntos WGS84 a UTM y calcula distancias euclidianas y longitud del segmento recto dentro de la unión de zonas. El mapa muestra el segmento, NO una calle ni un recorrido físicamente posible. Este modo **no debe utilizarse** para afirmar que una distribución evita vialidades conflictivas.
+Esto permite desvíos por calles cuando existe alternativa. La matriz de cada λ contiene la distancia física del camino escogido, su exposición geométrica y costo generalizado. Las restricciones de capacidad y cobertura del CVRP se resuelven sobre esa matriz. Es un cambio deliberado del criterio multiplicativo del artículo. En ambos modos los círculos solo están motivados por coocurrencia geométrica, no son una predicción probabilística.
 
-### (B) Red vial importada de QGIS — prototipo de navegación en grafo
+La red no se descarga de Internet, el usuario debe cargarla, y no se asumen conexiones inexistentes ni se permiten accesos mayores al umbral de snap. Si el grafo está desconectado o los sentidos impiden un origen-destino, se detiene la ejecución.
 
-Importa un GeoJSON de líneas de calle WGS84, lo proyecta a UTM y genera un grafo dirigido de vértices y segmentos. Cada conexión tiene `coste = longitud + λ * longitud_intersectada` con la unión de zonas de exposición; los segmentos bidireccionales se duplican en ambos sentidos, salvo propiedad `oneway` reconocida. Para cada depósito/cliente se busca el vértice de calle más próximo y se comprueba una distancia máxima de conexión. Después, Dijkstra calcula un camino mínimo generalizado entre cada par de destinos y guarda simultáneamente su longitud física y exposición.
+## Algoritmos
 
-La matriz entre pares depende de λ: el camino de costo mínimo puede cambiar con la penalización. **Esto es precisamente lo que permite el desvío dentro de la red vial**, a diferencia de un segmento recto. Si el grafo presenta componentes desconectados, sentidos incompatibles o puntos demasiado alejados, el sistema falla explícitamente en vez de inventar un camino.
+1. Empaquetado con retroceso limitado de demandas en hasta `K` vehículos de capacidad `Q`.
+2. Inserción de menor costo y mejora 2-opt intra-ruta.
+3. **Búsqueda local:** reubicación, intercambio y 2-opt, acepta mejoras.
+4. **Búsqueda tabú:** candidatos factibles, memoria por movimientos, aspiración, conservación de mejor solución, intensificación local.
+5. **ACO simplificado:** construcción probabilística con feromonas y atractivo inverso del costo, descarte de hormigas inviables, evaporación, refuerzo, 2-opt y búsqueda local.
+6. Validación de cobertura exactamente una vez y de las cargas; salida con rutas por vehículo.
 
-Advertencias: no se modelan giros prohibidos, semáforos, tráfico, velocidades, horarios, cierres ni circulación de vehículos pesados. Las intersecciones deben estar nodadas en QGIS. El tipo de capa y la calidad de topología afectan validez del resultado. El costo de conectar puntos al grafo se añade como aproximación recta; pueden existir accesos reales más largos.
+Cada método se ejecuta con λ=0 y con λ seleccionado, siempre con la misma semilla y los mismos datos de entrada, dentro de cada modo. La comparación 3 × 2 es válida **como estudio exploratorio**; para publicaciones se deben repetir semillas y normalizar presupuesto de cómputo.
 
-## 4. Heurísticas implementadas
+## Diseño de un estudio publicable
 
-### Solución inicial
+Usar los datos históricos auténticos y publicar un protocolo de limpieza/geocodificación, filtros de rango espacial, fuentes de incidentes, K y radio mínimo, fecha de consulta, red vial real validada, regla de penalización, parámetros del solucionador y versiones del software. Comparar varias semillas y estrategias, reportar mediana y dispersión de distancia física, exposición, cruces, costo objetivo, tiempo de matrices, tiempo de heurísticas y proporción de instancias factibles. No afirmar que el modo A implementa rutas viales transitables, ni que el modo B conserva idéntica función objetivo del manuscrito. Contrastar con OR-Tools o CVRPLIB donde corresponda. No mezclar datos sintéticos con reales en una tabla de resultados sin indicarlo explícitamente.
 
-1. Verificar que la demanda máxima no exceda `Q`, y que la demanda total no exceda `KQ`.
-2. Asignar demandas a vehículos mediante un algoritmo de empaquetado con retroceso limitado; no siempre existen soluciones factibles aun con capacidad global suficiente.
-3. Ordenar clientes de cada vehículo mediante inserción de menor costo.
-4. Aplicar inversiones `2-opt` y movimientos factibles de reubicación/intercambio de clientes entre vehículos.
+## Interpretación del artículo
 
-### Búsqueda local
-
-Acepta únicamente una mejora estricta del costo generalizado tras generar un conjunto de vecinos factibles. Se detiene cuando el muestreo no encuentra una mejora o se alcanza el presupuesto de pasadas. Es un método heurístico muy rápido, pero puede detenerse en un mínimo local.
-
-### Búsqueda tabú
-
-Parte de la solución local. En cada iteración considera reubicaciones e intercambios entre vehículos; permite movimientos temporalmente no mejorantes y restringe movimientos recientes mediante una memoria tabú. Una aspiración autoriza movimientos tabú cuando mejoran la mejor solución histórica. Se conserva la mejor solución encontrada y se aplica una intensificación local final.
-
-### Ant Colony Optimization (ACO)
-
-Simula colonias de hormigas que construyen rutas secuencialmente. La probabilidad de elegir el siguiente cliente combina feromona de arco y atractivo inverso de costo; cada hormiga respeta demandas y capacidad residual. Si una construcción deja clientes sin servir, se descarta. Tras la construcción se aplica `2-opt`; las mejores soluciones aportan feromona a sus arcos, mientras la evaporación evita persistencia absoluta. Al final se aplica búsqueda local a la mejor solución ACO. Para evitar una regresión trivial, se conserva como mínimo la solución inicial si las hormigas no mejoran el costo.
-
-Ninguna de estas alternativas produce certificados de optimalidad. Las implementaciones son **simplificadas**, controlables por semilla, comparables en la interfaz pero con distinta cantidad y estructura de operaciones; no se presentan como benchmarks estándar equivalentes en presupuesto de cómputo.
-
-## 5. Diseño de experimentos para publicación científica
-
-Sugerencia:
-
-1. Crear escenarios `λ∈{0,1,3,5,10}` y dos alcances de zona: empalmes y todas las zonas.
-2. Usar datos reales verificados y una red vial consistente con sentido de circulación.
-3. Comparar los tres métodos durante varias semillas (`n>=20`), mismo equipo, mismo conjunto de instancias; registrar media, desviación, mejor costo y tiempo.
-4. Reportar **distancia física**, **longitud expuesta**, **costo generalizado**, cargas, clientes atendidos, tiempo de cómputo y porcentaje de cobertura; jamás resumir todo como «distancia».
-5. Realizar análisis de sensibilidad por número de clústeres, buffer/radio geométrico y λ.
-6. Evaluar validez externa: diferentes ciudades, días, cambios de tráfico, cierre de calles e incertidumbre de geocodificación.
-7. Incorporar una comparación con **OR-Tools Guided Local Search** sobre el mismo grafo y parámetros para tener una línea de base reconocida y validar con CVRPLIB cuando sea posible.
-8. Documentar versiones, hashes de fuentes, filtros de riesgo, grafo vial, semillas y límites de tiempo.
-
-## 6. Posible línea cuántica
-
-Una extensión cuántica podría representar pequeñas instancias del CVRP como QUBO y ensayar QAOA o recocido cuántico; otra es resolver clásicamente la partición de clientes y ensayar subproblemas TSP con un procesador cuántico o simulador. Esto requiere acceso a hardware/simulador cuántico, traducción del problema, control de factibilidad, evaluación de latencia extremo a extremo y comparación contra la mejor solución clásica disponible.
-
-La literatura vigente reconoce dificultades de escala, costo de embedding, ruido y factibilidad. Esta versión no incorpora ejecución cuántica ni debe describirse como «cuánticamente optimizada».
-
-Fuentes de apoyo:
-- https://developers.google.com/optimization/routing/cvrp
-- https://developers.google.com/optimization/routing/routing_options
-- https://doi.org/10.1080/23302674.2025.2463530
-- https://www.mdpi.com/2624-6511/8/6/206
+El artículo reporta un ensayo de 97 clientes y seis círculos de conflicto. Sus resultados λ=0/1/3 (112.81, 128.45 y 129.41 km de costo reportado) **no se reproducen** con los clientes, incidentes o red de ejemplo. Para una réplica estricta hacen falta las mismas entradas originales y las condiciones detalladas de resolución. Este repositorio aporta la implementación metodológica y la extensión vial, con pruebas unitarias específicas.

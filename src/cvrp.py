@@ -24,7 +24,7 @@ from scipy.spatial import cKDTree
 from shapely.geometry import LineString, Point, shape
 from shapely.ops import transform, unary_union
 
-MAX_CLIENTES = 70
+MAX_CLIENTES = 150
 MAX_VIALIDADES_VERTICES = 12000
 
 class CVRPError(ValueError):
@@ -109,6 +109,10 @@ class Matrices:
     avisos: list[str]
     red_vertices: int = 0
     red_aristas: int = 0
+    cruces: np.ndarray | None = None
+    arcos_penalizados: np.ndarray | None = None
+    descripcion_objetivo: str = "Aditivo: distancia + lambda * longitud expuesta"
+    lambda_aplicada: float = 0.0
 
 
 def crear_nodos(clientes: pd.DataFrame, deposito_lat: float, deposito_lon: float,

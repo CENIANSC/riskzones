@@ -1,4 +1,4 @@
-"""Riesgos Urbanos · aplicación Streamlit multirriesgo + CVRP heurístico."""
+"""Riesgos Urbanos · aplicación Streamlit multirriesgo + CVRP A/B experimental."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,8 +17,8 @@ from src.analysis import (
 from src.exportacion import crear_paquete
 from src.visualizacion import mapa
 
-st.set_page_config(page_title="Riesgos Urbanos · K-Means", page_icon="🗺️", layout="wide")
-st.title("Riesgos urbanos | K-Means y CVRP")
+st.set_page_config(page_title="Riesgos Urbanos · K-Means + CVRP A/B", page_icon="🗺️", layout="wide")
+st.title("Riesgos urbanos | K-Means y CVRP de dos modos")
 st.caption(f"Versión {APP_VERSION} · K-Means por tipo de riesgo · exportación QGIS/GeoJSON · enfoque exploratorio")
 st.info("Las zonas representan agrupamientos geométricos, NO probabilidades ni niveles comprobados de peligro. "
         "Los puntos del ejemplo son simulados; sustituye el archivo para investigar datos reales.")
@@ -108,6 +108,9 @@ min_puntos = st.sidebar.number_input("Mínimo de incidentes por zona retenida", 
                                      help="Las zonas con menos incidentes se reportan, pero no se utilizan en los empalmes.")
 area_minima = st.sidebar.number_input("Área mínima de empalme (m²)", min_value=0, max_value=100000,
                                       value=100, step=100)
+forma_empalmes = st.sidebar.radio("Geometría utilizada para generar empalmes",
+    ["Envolventes convexas (aproximación al artículo)", "Círculos K-Means (exploratorio)"],
+    key="forma_empalmes")
 
 config_k = {}
 siluetas = {}
@@ -134,7 +137,10 @@ try:
     selected_ids = {z["id_zona"] for z in zonas_todas if z["n_incidentes"] >= int(min_puntos)}
     zonas = [z for z in zonas_todas if z["id_zona"] in selected_ids]
     envolventes = [e for e in envolventes_todas if e["id_zona"] in selected_ids]
-    empalmes = superposiciones(zonas, area_minima_m2=float(area_minima))
+    # El artículo superpone geometrías de clústeres irregulares ANTES de
+    # simplificarlas en círculos. Los hulls cumplen mejor esta secuencia.
+    base_empalmes = envolventes if forma_empalmes.startswith("Envolventes") else zonas
+    empalmes = superposiciones(base_empalmes, area_minima_m2=float(area_minima))
 except (DatosError, ValueError) as exc:
     st.error(f"No fue posible completar el análisis: {exc}")
     st.stop()
@@ -148,8 +154,8 @@ if len(zonas) < len(zonas_todas):
     st.warning(f"Se omitieron {len(zonas_todas)-len(zonas)} zonas de los empalmes por el mínimo de incidentes; "
                "los puntos originales se conservan en el mapa y en la exportación.")
 
-st.caption("Los empalmes representan regiones de coincidencia geométrica. "
-           "La operación elimina dobles conteos y distingue coincidencias de 2, 3 o más tipos.")
+st.caption("Los empalmes representan coincidencias geométricas sin doble conteo; "
+           f"proceden de: {forma_empalmes}. La simplificación circular posterior se realiza en CVRP.")
 map_tab, data_tab, meth_tab = st.tabs(["🗺️ Mapa interactivo", "📊 Tablas", "🔬 Metodología"]) 
 with map_tab:
     vis_puntos = st.checkbox("Mostrar puntos", True)
@@ -187,7 +193,7 @@ with meth_tab:
 3. Transformar las coordenadas WGS84 a UTM local para operar con metros.
 4. Agrupar **cada riesgo por separado** con K-Means (semilla aleatoria 42). Sugerir `K` con el índice de silueta si hay suficientes puntos y permitir ajuste manual.
 5. Calcular para cada grupo un centroide y la máxima distancia de sus incidentes al centroide; el radio circular es el máximo entre esa distancia y el radio mínimo establecido. Generar adicionalmente una envolvente convexa con buffer.
-6. Conservar zonas de cada tipo por separado; disolver zonas del mismo tipo y efectuar superposiciones entre **tipos distintos**. Las regiones resultantes son disjuntas y permiten evaluar coincidencias de dos o más categorías sin contarlas dos veces.
+6. Calcular empalmes entre **tipos distintos** usando preferentemente envolventes convexas de clústeres, antes de crear círculos de conflicto, siguiendo la secuencia geométrica del artículo. Las partes resultantes son disjuntas.
 7. Exportar CSV, GeoJSON en WGS84 y manifiesto metodológico con SHA-256, filtros, parámetros, software y proyección.
 
 **Limitaciones:** K-Means no demuestra *hotspots* estadísticamente significativos, y la densidad de registros no equivale a tasa de riesgo sin exposición vial, subregistro, temporalidad y validación. Las zonas no representan barreras físicas. El módulo CVRP se encuentra al final de esta página; no garantiza el óptimo global.
@@ -207,6 +213,7 @@ conf_export = {
     "buffer_envolvente_m": buffer_hull,
     "min_incidentes_zona": int(min_puntos),
     "area_minima_empalmes_m2": int(area_minima),
+    "geometria_para_empalmes": forma_empalmes,
     "dataset_ejemplo_simulado": file is None,
 }
 calidad = {**calidad, "fuera_area": fuera}
@@ -225,4 +232,4 @@ st.caption("Los archivos que subes se procesan en memoria durante la sesión. "
 st.divider()
 from src.cvrp_ui import bloque_cvrp
 bloque_cvrp(zonas=zonas,empalmes=empalmes,to_m=to_m,to_geo=to_geo,epsg=epsg,
-            risk_bytes=contenido,config_k=config_k)
+            risk_bytes=contenido,config_k=config_k,forma_empalmes=forma_empalmes)
