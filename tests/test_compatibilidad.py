@@ -15,6 +15,6 @@ def test_app_rejects_old_interface():
     assert 'VERSION_INTERFAZ_CVRP' in app
     assert 'inspect.signature' in app
     assert 'except TypeError' in app
-    assert "1.3.4" in app
+    assert "'1.3.5'" in app
     ui = (ROOT/'src'/'cvrp_ui.py').read_text(encoding='utf-8')
-    assert "VERSION_INTERFAZ_CVRP = '1.3.4'" in ui
+    assert "VERSION_INTERFAZ_CVRP = '1.3.5'" in ui

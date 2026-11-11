@@ -20,10 +20,9 @@ from src.exportacion import crear_paquete
 from src import visualizacion as _visualizacion
 from src.cvrp_experimentos import crear_circulos_empalmes
 
-st.set_page_config(page_title="Riesgos Urbanos · K-Means + CVRP A/B", page_icon="🗺️", layout="wide")
-st.title("Riesgos urbanos | K-Means y CVRP de dos modos")
-st.caption("Paquete integrado 1.3.5 · compatibilidad de mapa y CVRP verificada")
-st.caption(f"Versión {APP_VERSION} · K-Means por tipo de riesgo · exportación QGIS/GeoJSON · enfoque exploratorio")
+st.set_page_config(page_title="Riesgos urbanos|K-Means y CVRP", page_icon="🗺️", layout="wide")
+st.title("Riesgos urbanos|K-Means y CVRP")
+st.markdown("**Daniel A. Aguirre Ibarra**  \nDoctorado en Logística y Dirección de la Cadena de Suministro  \nUPAEP")
 st.info("Las zonas representan agrupamientos geométricos, NO probabilidades ni niveles comprobados de peligro. "
         "Los puntos del ejemplo son simulados; sustituye el archivo para investigar datos reales.")
 
@@ -81,26 +80,16 @@ except DatosError as exc:
     st.stop()
 
 st.sidebar.header("Configuración geográfica")
-modo = st.sidebar.selectbox("Área de estudio", ["Sin filtro", "Radio urbano", "Límite municipal (GeoJSON)"], index=0)
-kwargs = {}
+# Área de estudio fija: siempre se aplica el filtro por radio urbano.
+modo = "Radio urbano"
+st.sidebar.markdown("**Área de estudio: Radio urbano**")
+st.sidebar.caption("El radio urbano es un filtro de análisis; no equivale al límite municipal.")
 limite = None
-if modo == "Radio urbano":
-    st.sidebar.caption("El círculo NO representa el límite oficial del municipio.")
-    kwargs["centro_lat"] = st.sidebar.number_input("Centro · latitud", value=20.6838673, format="%.7f")
-    kwargs["centro_lon"] = st.sidebar.number_input("Centro · longitud", value=-101.3526233, format="%.7f")
-    kwargs["radio_km"] = st.sidebar.slider("Radio de análisis (km)", 1.0, 40.0, 6.0, step=0.5)
-elif modo == "Límite municipal (GeoJSON)":
-    lim_file = st.sidebar.file_uploader("Polígono GeoJSON municipal (WGS84)", type=["geojson", "json"])
-    if lim_file:
-        try:
-            limite = leer_limite_geojson(lim_file.getvalue())
-        except DatosError as exc:
-            st.sidebar.error(str(exc))
-            st.stop()
-    else:
-        st.sidebar.warning("Sube un polígono municipal oficial; no viene incluido para evitar límites inventados.")
-        st.stop()
-    kwargs["limite_geojson"] = limite
+kwargs = {
+    "centro_lat": st.sidebar.number_input("Centro · latitud", value=20.6838673, format="%.7f"),
+    "centro_lon": st.sidebar.number_input("Centro · longitud", value=-101.3526233, format="%.7f"),
+    "radio_km": st.sidebar.slider("Radio de análisis (km)", 1.0, 40.0, 6.0, step=0.5),
+}
 
 try:
     filtrados, fuera = filtrar_area(original, modo, **kwargs)
@@ -135,9 +124,9 @@ min_puntos = st.sidebar.number_input("Mínimo de incidentes por zona retenida", 
                                      help="Las zonas con menos incidentes se reportan, pero no se utilizan en los empalmes.")
 area_minima = st.sidebar.number_input("Área mínima de empalme (m²)", min_value=0, max_value=100000,
                                       value=100, step=100)
-forma_empalmes = st.sidebar.radio("Geometría utilizada para generar empalmes",
-    ["Envolventes convexas (aproximación al artículo)", "Círculos K-Means (exploratorio)"],
-    key="forma_empalmes")
+# Método único de construcción de empalmes: envolventes convexas.
+forma_empalmes = "Envolventes convexas"
+st.sidebar.markdown("**Geometría para generar empalmes: Envolventes convexas**")
 
 config_k = {}
 siluetas = {}
@@ -166,7 +155,7 @@ try:
     envolventes = [e for e in envolventes_todas if e["id_zona"] in selected_ids]
     # El artículo superpone geometrías de clústeres irregulares ANTES de
     # simplificarlas en círculos. Los hulls cumplen mejor esta secuencia.
-    base_empalmes = envolventes if forma_empalmes.startswith("Envolventes") else zonas
+    base_empalmes = envolventes
     empalmes = superposiciones(base_empalmes, area_minima_m2=float(area_minima))
     circulos_conflicto = crear_circulos_empalmes(empalmes)
 except (DatosError, ValueError) as exc:
@@ -247,11 +236,11 @@ with meth_tab:
 **Procedimiento reproducible**
 
 1. Leer un Excel con tres columnas: `latitud`, `longitud`, `tipo_riesgo`. Validar y conservar la fila de origen.
-2. Filtrar por área de estudio elegida (opcional). Un radio urbano **no equivale** a un municipio.
+2. Filtrar los registros con el radio urbano configurado. Este radio **no equivale** al límite del municipio.
 3. Transformar las coordenadas WGS84 a UTM local para operar con metros.
 4. Agrupar **cada riesgo por separado** con K-Means (semilla aleatoria 42). Sugerir `K` con el índice de silueta si hay suficientes puntos y permitir ajuste manual.
 5. Calcular para cada grupo un centroide y la máxima distancia de sus incidentes al centroide; el radio circular es el máximo entre esa distancia y el radio mínimo establecido. Generar adicionalmente una envolvente convexa con buffer.
-6. Calcular empalmes entre **tipos distintos** usando preferentemente envolventes convexas de clústeres, antes de crear círculos de conflicto, siguiendo la secuencia geométrica del artículo. Las partes resultantes son disjuntas.
+6. Calcular empalmes entre **tipos distintos** utilizando las envolventes convexas de los clústeres, antes de crear círculos de conflicto. Las partes resultantes son disjuntas.
 7. Para **cada empalme**, calcular centroide y radio máximo hasta los vértices del polígono; dibujar el **círculo final** con centro y radio. Estos círculos no son iguales a los círculos individuales K-Means.
 8. Exportar CSV, GeoJSON en WGS84 y manifiesto metodológico con SHA-256, filtros, parámetros, software y proyección.
 
@@ -284,8 +273,6 @@ paquete = crear_paquete(
 st.download_button("⬇️ Descargar resultados para QGIS y manifiesto (ZIP)",
                    data=paquete, file_name="resultados_riesgos_urbanos_qgis.zip",
                    mime="application/zip", type="primary")
-st.caption("Los archivos que subes se procesan en memoria durante la sesión. "
-           "No publiques datos sensibles o identificables en una aplicación pública.")
 
 
 st.divider()
@@ -327,5 +314,5 @@ except TypeError as _err:
     st.error('El módulo CVRP produjo un TypeError interno. La compatibilidad entre '
              'archivos ya fue verificada: revisa Manage app → Logs y comparte la '
              'última línea y el marco interno del traceback para diagnosticarlo.')
-    st.caption(f'Tipo de excepción: {type(_err).__name__} · paquete 1.3.5')
+    st.caption(f'Tipo de excepción: {type(_err).__name__}')
     st.stop()

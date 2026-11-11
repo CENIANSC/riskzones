@@ -114,12 +114,7 @@ ni considerar las rutas rectas como transitables.
     alcance='Círculos derivados de empalmes multirriesgo'
     max_snap=250.
     if modo==MODO_B:
-        alcance=st.radio('Polígonos de riesgo sobre calles',
-          ['Círculos derivados de empalmes multirriesgo',
-           'Círculos individuales K-Means (EXTENSIÓN, no artículo)'],
-          key='exp_risk_area')
-        if alcance.startswith('Círculos individuales'):
-            circulos=[{**z,'riesgos':z.get('tipo_riesgo','')} for z in zonas]
+        st.caption('Penalización vial mediante círculos derivados de empalmes multirriesgo.')
         fuente_vial=st.radio('Fuente de vialidades',
             ['Descargar calles REALES de OpenStreetMap (OSMnx)',
              'Cargar red vial propia (GeoJSON de QGIS)',

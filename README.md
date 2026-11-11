@@ -8,7 +8,7 @@ La versión 1.3.5 mantiene el **Modo A** del artículo (Haversine y penalizació
 
 ## Despliegue en GitHub y Streamlit
 
-Sube el **contenido completo** de este ZIP a la raíz del repositorio, reemplazando `app.py`, `src/` y `requirements.txt`. **No combines versiones.** Inicia con `app.py` como archivo principal. La cabecera debe indicar `Paquete integrado 1.3.5`. Se mantiene la versión interna 1.3.4 del módulo del mapa porque la interfaz de visualización no ha cambiado.
+Sube el **contenido completo** de este ZIP a la raíz del repositorio, reemplazando `app.py`, `src/` y `requirements.txt`. **No combines versiones.** Inicia con `app.py` como archivo principal. La cabecera muestra el título académico, el autor, el programa doctoral y UPAEP; los números de versión solo se conservan internamente para comprobar compatibilidad.
 
 `requirements.txt` incorpora `osmnx>=2.1,<3`. Requiere Python 3.11+ (`.python-version` fija 3.11). Streamlit Community Cloud instalará dependencias al desplegar.
 
@@ -35,3 +35,11 @@ Los datos de OpenStreetMap **no garantizan cobertura, accesos, sentidos de circu
 ## Validación
 
 Ejecuta `python -m unittest discover -s tests -v`. Las pruebas de la conversión de un grafo de OSMnx a GeoJSON y de univocidad vial se realizan **sin Internet**, con un grafo simulado. Una verificación integral de descarga en Streamlit Cloud y de exactitud de los datos OSM debe hacerse en el despliegue real.
+
+## Personalización de la interfaz
+
+- Encabezado: **Riesgos urbanos|K-Means y CVRP**, **Daniel A. Aguirre Ibarra**, **Doctorado en Logística y Dirección de la Cadena de Suministro**, **UPAEP**.
+- Área de estudio fija en **Radio urbano**, con centro y radio ajustables. No se ofrecen opciones de ausencia de filtro ni de límite municipal.
+- Los empalmes se construyen **exclusivamente con envolventes convexas**. No se ofrece la alternativa de círculos K-Means para formar empalmes.
+- El Modo B utiliza los círculos finales de los empalmes como áreas de penalización; tampoco ofrece círculos individuales de K-Means.
+- La pantalla principal no presenta subtítulos de versiones o paquetes y se eliminó el texto inmediatamente inferior a la descarga de resultados QGIS y manifiesto.
