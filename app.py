@@ -4,6 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 import hashlib
 import json
+import inspect
+import logging
 
 import pandas as pd
 import streamlit as st
@@ -16,9 +18,11 @@ from src.analysis import (
 )
 from src.exportacion import crear_paquete
 from src.visualizacion import mapa
+from src.cvrp_experimentos import crear_circulos_empalmes
 
 st.set_page_config(page_title="Riesgos Urbanos · K-Means + CVRP A/B", page_icon="🗺️", layout="wide")
 st.title("Riesgos urbanos | K-Means y CVRP de dos modos")
+st.caption("Paquete integrado 1.3.3 · círculos de empalme visibles · control de compatibilidad CVRP")
 st.caption(f"Versión {APP_VERSION} · K-Means por tipo de riesgo · exportación QGIS/GeoJSON · enfoque exploratorio")
 st.info("Las zonas representan agrupamientos geométricos, NO probabilidades ni niveles comprobados de peligro. "
         "Los puntos del ejemplo son simulados; sustituye el archivo para investigar datos reales.")
@@ -141,32 +145,47 @@ try:
     # simplificarlas en círculos. Los hulls cumplen mejor esta secuencia.
     base_empalmes = envolventes if forma_empalmes.startswith("Envolventes") else zonas
     empalmes = superposiciones(base_empalmes, area_minima_m2=float(area_minima))
+    circulos_conflicto = crear_circulos_empalmes(empalmes)
 except (DatosError, ValueError) as exc:
     st.error(f"No fue posible completar el análisis: {exc}")
     st.stop()
 
 st.subheader("Resultados")
-m1, m2, m3 = st.columns(3)
+m1, m2, m3, m4 = st.columns(4)
 m1.metric("Zonas obtenidas", len(zonas_todas))
 m2.metric("Zonas retenidas", len(zonas))
 m3.metric("Empalmes de 2+ riesgos", len(empalmes))
+m4.metric("Círculos de conflicto", len(circulos_conflicto))
 if len(zonas) < len(zonas_todas):
     st.warning(f"Se omitieron {len(zonas_todas)-len(zonas)} zonas de los empalmes por el mínimo de incidentes; "
                "los puntos originales se conservan en el mapa y en la exportación.")
 
 st.caption("Los empalmes representan coincidencias geométricas sin doble conteo; "
-           f"proceden de: {forma_empalmes}. La simplificación circular posterior se realiza en CVRP.")
+           f"proceden de: {forma_empalmes}. Los círculos se calculan a partir de cada empalme, "
+           "usando su centroide y la distancia máxima a sus vértices, y son la geometría "
+           "empleada para la penalización del CVRP (modo A, alcance predeterminado).")
 map_tab, data_tab, meth_tab = st.tabs(["🗺️ Mapa interactivo", "📊 Tablas", "🔬 Metodología"]) 
 with map_tab:
     vis_puntos = st.checkbox("Mostrar puntos", True)
     vis_hulls = st.checkbox("Incluir envolventes convexas", False)
-    vis_overlap = st.checkbox("Destacar coincidencias multirriesgo", True)
+    vis_overlap = st.checkbox("Mostrar empalmes irregulares", True)
+    vis_circles = st.checkbox("Mostrar CÍRCULOS de conflicto generados por empalmes", True)
+    vis_centers = st.checkbox("Mostrar centroides y radios de círculos de conflicto", True)
+    if not circulos_conflicto:
+        st.warning("No existen empalmes con los parámetros actuales, por lo que no hay círculos "
+                   "de conflicto derivados de empalmes. Ajusta K, filtros o el área mínima de empalme.")
+    else:
+        st.info(f"Se generaron {len(circulos_conflicto)} círculos a partir de {len(empalmes)} "
+                "empalmes. En el mapa se distinguen por su **contorno azul discontinuo**; "
+                "los polígonos de empalme se muestran en magenta.")
     if len(puntos_m) > 3000:
         st.info("Para mantener fluido el mapa se visualiza una muestra reproducible de 3 000 puntos. "
                 "La exportación incluye todos los registros.")
     m, _ = mapa(puntos=clasificados, zonas=zonas, envolventes=envolventes,
                 empalmes=empalmes, to_geo=to_geo, mostrar_puntos=vis_puntos,
-                mostrar_hulls=vis_hulls, mostrar_empalmes=vis_overlap, limite_original=limite)
+                mostrar_hulls=vis_hulls, mostrar_empalmes=vis_overlap,
+                mostrar_circulos_conflicto=vis_circles, mostrar_centros_conflicto=vis_centers,
+                limite_original=limite)
     components.html(m.get_root().render(), height=630, scrolling=False)
     st.caption("Mapa de calles: © OpenStreetMap contributors. No requiere API key. "
                "Amplía con + para distinguir avenidas, calles e intersecciones. "
@@ -178,6 +197,12 @@ with data_tab:
     tabla_zonas = tabla_geometria(zonas_todas, to_geo)
     tabla_zonas["retenida"] = tabla_zonas["id_zona"].isin(selected_ids)
     st.dataframe(tabla_zonas, hide_index=True, use_container_width=True)
+    st.markdown("**Círculos de conflicto derivados de los empalmes (centroide y radio)**")
+    if circulos_conflicto:
+        st.dataframe(tabla_geometria(circulos_conflicto, to_geo), hide_index=True,
+                     use_container_width=True)
+    else:
+        st.info("No se generaron círculos por falta de empalmes.")
     st.markdown("**Empalmes entre tipos distintos**")
     tabla_empalmes = tabla_geometria(empalmes, to_geo)
     if empalmes:
@@ -194,7 +219,8 @@ with meth_tab:
 4. Agrupar **cada riesgo por separado** con K-Means (semilla aleatoria 42). Sugerir `K` con el índice de silueta si hay suficientes puntos y permitir ajuste manual.
 5. Calcular para cada grupo un centroide y la máxima distancia de sus incidentes al centroide; el radio circular es el máximo entre esa distancia y el radio mínimo establecido. Generar adicionalmente una envolvente convexa con buffer.
 6. Calcular empalmes entre **tipos distintos** usando preferentemente envolventes convexas de clústeres, antes de crear círculos de conflicto, siguiendo la secuencia geométrica del artículo. Las partes resultantes son disjuntas.
-7. Exportar CSV, GeoJSON en WGS84 y manifiesto metodológico con SHA-256, filtros, parámetros, software y proyección.
+7. Para **cada empalme**, calcular centroide y radio máximo hasta los vértices del polígono; dibujar el **círculo final** con centro y radio. Estos círculos no son iguales a los círculos individuales K-Means.
+8. Exportar CSV, GeoJSON en WGS84 y manifiesto metodológico con SHA-256, filtros, parámetros, software y proyección.
 
 **Limitaciones:** K-Means no demuestra *hotspots* estadísticamente significativos, y la densidad de registros no equivale a tasa de riesgo sin exposición vial, subregistro, temporalidad y validación. Las zonas no representan barreras físicas. El módulo CVRP se encuentra al final de esta página; no garantiza el óptimo global.
 """)
@@ -230,6 +256,43 @@ st.caption("Los archivos que subes se procesan en memoria durante la sesión. "
 
 
 st.divider()
-from src.cvrp_ui import bloque_cvrp
-bloque_cvrp(zonas=zonas,empalmes=empalmes,to_m=to_m,to_geo=to_geo,epsg=epsg,
-            risk_bytes=contenido,config_k=config_k,forma_empalmes=forma_empalmes)
+# Comprobación estricta para evitar el TypeError al mezclar versiones.
+# Se verifica la versión declarada y la firma real de la función.
+try:
+    from src import cvrp_ui as _cvrp_ui
+except (ImportError, ModuleNotFoundError) as _err:
+    st.error("No fue posible cargar el módulo CVRP. Actualiza app.py y TODA la carpeta src/ "
+             "del mismo ZIP y verifica requirements.txt.")
+    st.caption(f"Tipo de error: {type(_err).__name__}; consulta Manage app → Logs.")
+    st.stop()
+
+_EXPECTED_CVRP_ARGS = {'zonas', 'empalmes', 'to_m', 'to_geo', 'epsg',
+                       'risk_bytes', 'config_k', 'forma_empalmes'}
+_ui_version = getattr(_cvrp_ui, 'VERSION_INTERFAZ_CVRP', None)
+try:
+    _signature = inspect.signature(_cvrp_ui.bloque_cvrp)
+    _arguments = set(_signature.parameters)
+except (TypeError, ValueError, AttributeError):
+    _arguments = set()
+_missing = sorted(_EXPECTED_CVRP_ARGS - _arguments)
+if _ui_version != '1.3.3' or _missing:
+    st.error('Se detectó una mezcla de archivos de versiones diferentes. '
+             'Actualiza el proyecto completo desde el ZIP 1.3.3, no únicamente app.py. '
+             'La función CVRP no coincide con los parámetros que envía la interfaz.')
+    st.code(f'Interfaz instalada: {_ui_version or "sin versión"}\n'
+            f'Parámetros faltantes: {_missing or "ninguno"}', language='text')
+    st.stop()
+
+try:
+    _cvrp_ui.bloque_cvrp(
+        zonas=zonas, empalmes=empalmes, to_m=to_m, to_geo=to_geo, epsg=epsg,
+        risk_bytes=contenido, config_k=config_k, forma_empalmes=forma_empalmes)
+except TypeError as _err:
+    # El detalle se conserva en los logs de Streamlit, sin imprimir ubicaciones
+    # sensibles ni contenidos del Excel en la interfaz pública.
+    logging.getLogger(__name__).exception('CVRP TypeError en versión integrada 1.3.3')
+    st.error('El módulo CVRP produjo un TypeError interno. La compatibilidad entre '
+             'archivos ya fue verificada: revisa Manage app → Logs y comparte la '
+             'última línea y el marco interno del traceback para diagnosticarlo.')
+    st.caption(f'Tipo de excepción: {type(_err).__name__} · paquete 1.3.3')
+    st.stop()

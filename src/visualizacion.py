@@ -8,6 +8,7 @@ import folium
 from folium.plugins import Fullscreen, MiniMap
 from pyproj import Transformer
 from shapely.ops import transform
+from src.cvrp_experimentos import crear_circulos_empalmes
 
 COLORS = ["#2563EB", "#DC2626", "#059669", "#A855F7", "#EA580C", "#0891B2",
           "#C026D3", "#B45309", "#64748B", "#65A30D", "#C2410C", "#0F766E"]
@@ -15,6 +16,7 @@ COLORS = ["#2563EB", "#DC2626", "#059669", "#A855F7", "#EA580C", "#0891B2",
 
 def mapa(*, puntos, zonas, envolventes, empalmes, to_geo: Transformer,
          mostrar_puntos=True, mostrar_hulls=False, mostrar_empalmes=True,
+         mostrar_circulos_conflicto=True, mostrar_centros_conflicto=True,
          limite_original=None, max_puntos=3000):
     tipos = sorted(puntos.tipo_riesgo.unique())
     paleta = {t: COLORS[i % len(COLORS)] for i, t in enumerate(tipos)}
@@ -68,6 +70,33 @@ def mapa(*, puntos, zonas, envolventes, empalmes, to_geo: Transformer,
                            }, tooltip=(f"{e['riesgos']} · {e['n_tipos']} riesgos · "
                                        f"área {e['area_m2']:.0f} m²")).add_to(eg)
         eg.add_to(mp)
+    # Zonas circulares definitivas: se obtienen de los EMPALMES, no de K-Means.
+    # Se dibujan como capas propias, con estilo contrastante y centros visibles.
+    circulos_conflicto = crear_circulos_empalmes(empalmes or [])
+    if mostrar_circulos_conflicto and circulos_conflicto:
+        cg = folium.FeatureGroup(name=f"CÍRCULOS DE CONFLICTO · {len(circulos_conflicto)} (penalización CVRP)", show=True)
+        for c in circulos_conflicto:
+            g = transform(to_geo.transform, c["geometry"])
+            texto = (f"Círculo {c['id_zona']} | {c['riesgos']} | "
+                     f"radio {c['radio_m']:.1f} m | "
+                     f"empalme original {c['area_empalme_m2']:.0f} m²")
+            folium.GeoJson(g.__geo_interface__,
+                style_function=lambda _, color="#0D47A1": {
+                    "color": color, "fillColor": "#64B5F6", "weight": 4,
+                    "opacity": 1, "fillOpacity": 0.09, "dashArray": "8, 5"
+                }, tooltip=texto).add_to(cg)
+        cg.add_to(mp)
+        if mostrar_centros_conflicto:
+            centros = folium.FeatureGroup(name="Centros y radios de conflicto", show=True)
+            for c in circulos_conflicto:
+                lon, lat = to_geo.transform(c["centro_x_m"], c["centro_y_m"])
+                folium.CircleMarker(
+                    location=[lat, lon], radius=6, color="#08306B",
+                    weight=2, fill=True, fill_color="#FFFFFF", fill_opacity=1,
+                    tooltip=f"Centro {c['id_zona']} · radio {c['radio_m']:.1f} m",
+                    popup=f"Círculo {c['id_zona']} · {c['riesgos']} · {c['radio_m']:.1f} m"
+                ).add_to(centros)
+            centros.add_to(mp)
     if mostrar_puntos:
         pg = folium.FeatureGroup(name="Incidentes individuales", show=True)
         muestreo = puntos if len(puntos) <= max_puntos else puntos.sample(max_puntos, random_state=42)

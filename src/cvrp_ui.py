@@ -18,6 +18,8 @@ from src.cvrp_experimentos import (crear_circulos_empalmes, matriz_articulo,
 from src.cvrp_export import zip_cvrp
 from src.cvrp_viz import mapa_cvrp
 
+VERSION_INTERFAZ_CVRP = '1.3.3'
+
 TECNICAS = ['Búsqueda local', 'Búsqueda tabú', 'Colonia de hormigas (ACO)']
 ROOT=Path(__file__).resolve().parents[1]
 DEMO25=ROOT/'data'/'clientes_ejemplo_irapuato.csv'

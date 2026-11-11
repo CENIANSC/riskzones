@@ -1,8 +1,39 @@
-# Riesgos Urbanos + CVRP: dos modalidades experimentales (v1.3)
+# Versión integrada 1.3.3: círculos visibles y diagnóstico de TypeError
+
+Esta versión **reúne** la visualización de los círculos de conflicto generados desde los empalmes (versión 1.3.2) con protección de compatibilidad de la interfaz CVRP. Se comprueba el identificador del módulo y la firma efectiva de `bloque_cvrp` antes de ejecutarlo; si el error es interno, se registra el traceback completo en los logs, sin mostrar datos sensibles en la pantalla pública.
+
+**Actualización recomendada:** subir todos los archivos y carpetas contenidos en este ZIP a la **raíz** del mismo repositorio y rama configurados en Streamlit Cloud; sobrescribir `app.py`, todos los archivos de `src/`, `requirements.txt` y `.streamlit/config.toml`. No anidar una carpeta extra. Después hacer commit y reiniciar la aplicación. Si no cambia, verificar en Manage app que el repositorio, rama y main file path sean los correctos y consultar logs.
+
+**Importante:** el traceback compartido termina en la llamada a `bloque_cvrp`; sin su línea final (`TypeError: ...`) no se puede asegurar la causa. Una posible causa es la mezcla de versiones 1.2/1.3. Esta versión identifica ese caso explícitamente. Otro TypeError interno será diagnosticable por logs.
+
+**Capas visuales:** marcar «Mostrar CÍRCULOS de conflicto generados por empalmes» y «Mostrar centros» en el mapa principal. Contornos azules discontinuos, círculos finales de penalización CVRP; los empalmes irregulares siguen visibles. El mapa de CVRP también conserva ambas capas.
+
+# Actualización 1.3.2 — Visualización de círculos de conflicto
+
+El mapa principal ahora muestra, por separado, los polígonos de empalme multirriesgo (magenta) y los **círculos finales de conflicto** (contorno azul discontinuo, centro blanco), generados por centroide y radio máximo hasta vértices de cada empalme. Las capas se pueden activar y desactivar. Se muestra una tabla de centros y radios, y un indicador con el número de círculos. La capa de círculos individuales K-Means es diferente. En el modo CVRP, los círculos de conflicto se resaltan con línea más gruesa y controles de capas expandidos.
+
+Si no hay empalmes, no hay círculos derivados de empalmes; ajustar K, filtros o superficie mínima. Para actualizar, sustituir todos los archivos del repositorio, en especial `app.py`, `src/visualizacion.py`, `src/cvrp_viz.py` y `src/analysis.py`.
+
+---
+
+# Riesgos Urbanos + CVRP: dos modalidades experimentales (v1.3.1)
 
 Aplicación **Streamlit** para identificar agrupamientos espaciales y zonas de conflicto a partir de **un único Excel** de incidentes, y comparar tres heurísticas de ruteo capacitado (**Búsqueda local**, **Búsqueda tabú**, **Colonia de hormigas — ACO**) en **dos escenarios de costo**, `λ=0` y `λ>0`. El usuario puede seleccionar **uno de dos modos científicos**, que **no tienen la misma función objetivo**.
 
 **Advertencia:** es un prototipo de investigación. Los incidentes, clientes y calles del repositorio son **simulados**. K-Means no estima la probabilidad real de accidente o delincuencia. Las heurísticas no demuestran optimalidad global. La fidelidad al artículo es **metodológica**, no una reproducción numérica certificada de su experimento original.
+
+## Corrección v1.3.1: error TypeError en `bloque_cvrp`
+
+La v1.3 añadió el argumento `forma_empalmes` a `bloque_cvrp`. Si se
+actualiza solo `app.py` y se conserva `src/cvrp_ui.py` de v1.2, la llamada
+falla con `TypeError` en la línea de `app.py`. La v1.3.1 incluye una
+verificación explícita de compatibilidad de archivos y preserva ambos modos
+experimentales A/B.
+
+**Actualización importante:** no sustituyas solo `app.py`. Sube todo el
+contenido del ZIP, incluidas las carpetas `src/` y `data/`, y los archivos
+`requirements.txt` y `.python-version` a la **raíz** de GitHub. Realiza
+*Commit changes*; si Streamlit mantiene una versión antigua, usa *Reboot app*.
 
 ## Instalación y publicación
 

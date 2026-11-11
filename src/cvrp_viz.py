@@ -36,7 +36,7 @@ def mapa_cvrp(sol, matrices, clientes, to_geo, zonas=None, empalmes=None,
             geo=transform(to_geo.transform,c['geometry'])
             folium.GeoJson(mapping(geo),
                 style_function=lambda f:{'color':'#AF2B26','fillColor':'#EF5350',
-                                         'weight':2,'fillOpacity':.10},
+                                         'weight':4,'fillOpacity':.07,'dashArray':'8, 5'},
                 tooltip=f"Zona {c.get('id_zona','?')} · radio {c.get('radio_m',0):.1f} m").add_to(grp_c)
     for v,route in enumerate(sol.rutas,1):
         if not route:
@@ -60,5 +60,5 @@ def mapa_cvrp(sol, matrices, clientes, to_geo, zonas=None, empalmes=None,
         folium.CircleMarker(location=[float(r.latitud),float(r.longitud)],radius=4,
             color='#263238',weight=1,fill=True,fill_opacity=.95,fill_color='#FFFFFF',
             popup=f"{r.cliente}: demanda {r.demanda:g}",tooltip=str(r.cliente)).add_to(grp_p)
-    folium.LayerControl(collapsed=True).add_to(m)
+    folium.LayerControl(collapsed=False).add_to(m)
     return m
