@@ -1,0 +1,10 @@
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+.env
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+*.log
+resultados_riesgos_urbanos_qgis.zip
