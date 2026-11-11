@@ -4,6 +4,16 @@ Aplicación Python/Streamlit para agrupar **cualquier número de tipos de riesgo
 
 > **Naturaleza de los resultados.** Es una herramienta de exploración geoespacial. K-Means y los polígonos derivados de sus centroides **no demuestran riesgo causal, probabilidad de accidente/delito, ni puntos críticos estadísticamente significativos**. Tampoco constituye un solucionador de rutas CVRP. Los puntos del ejemplo son inventados para pruebas.
 
+## Cambios en la versión 1.1.0: calles y mapa sin clave API
+
+El mapa base ahora utiliza **OpenStreetMap estándar** mediante Folium, con nombres de calles y vialidades al acercar el zoom. Sustituye a `CartoDB positron`, cuyas teselas exigen clave API desde septiembre de 2026. No debes configurar ninguna clave para esta versión; solo se necesita conexión a Internet en el navegador para cargar el mapa base.
+
+**Actualizar un repositorio existente:** reemplaza `src/visualizacion.py`, `app.py`, `src/analysis.py` y `README.md` (o sube todos los archivos de esta versión conservando tu estructura). Haz commit en GitHub; Streamlit Community Cloud suele redeplegar al detectar cambios en la rama. Recarga el navegador con **Ctrl+F5** para descartar teselas antiguas guardadas en caché.
+
+Si no ves calles, comprueba que tu navegador/red permita cargar `https://tile.openstreetmap.org/`. La visualización de incidentes, zonas y empalmes sigue siendo la misma; no se cambia el algoritmo de agrupamiento ni las exportaciones.
+
+**Atribución:** © OpenStreetMap contributors. Para tráfico elevado o proyectos comerciales, revisa la [política de uso de teselas de OSM](https://operations.osmfoundation.org/policies/tiles/), pues el servicio público no garantiza disponibilidad ilimitada.
+
 ## 1. Archivo Excel de entrada
 
 Incluye `data/riesgos_ejemplo_irapuato.xlsx` con **una sola hoja** denominada `Riesgos` y 150 filas simuladas:

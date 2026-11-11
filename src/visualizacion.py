@@ -1,4 +1,7 @@
-"""Mapas Folium con controles de capas (requiere conectividad a teselas OSM)."""
+"""Mapas Folium con calles de OpenStreetMap y capas de riesgo.
+
+No utiliza CARTO: desde septiembre de 2026 sus mosaicos exigen API key.
+"""
 from __future__ import annotations
 
 import folium
@@ -15,10 +18,16 @@ def mapa(*, puntos, zonas, envolventes, empalmes, to_geo: Transformer,
          limite_original=None, max_puntos=3000):
     tipos = sorted(puntos.tipo_riesgo.unique())
     paleta = {t: COLORS[i % len(COLORS)] for i, t in enumerate(tipos)}
+    # OpenStreetMap estándar muestra vialidades y no requiere clave API.
+    # Se mantiene la atribución obligatoria. CARTO Positron ya no funciona sin key.
     mp = folium.Map(
         location=[float(puntos.latitud.mean()), float(puntos.longitud.mean())],
-        zoom_start=12, tiles="CartoDB positron", control_scale=True, prefer_canvas=True,
+        zoom_start=13, tiles=None, control_scale=True, prefer_canvas=True,
     )
+    folium.TileLayer(
+        tiles="OpenStreetMap", name="Calles y vialidades (OpenStreetMap)",
+        overlay=False, control=True, show=True,
+    ).add_to(mp)
     if limite_original is not None:
         folium.GeoJson(limite_original.__geo_interface__, name="Límite de estudio (aportado)",
                        style_function=lambda _: {"color": "#374151", "weight": 2,

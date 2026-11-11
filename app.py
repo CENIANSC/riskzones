@@ -165,7 +165,9 @@ with map_tab:
                 empalmes=empalmes, to_geo=to_geo, mostrar_puntos=vis_puntos,
                 mostrar_hulls=vis_hulls, mostrar_empalmes=vis_overlap, limite_original=limite)
     components.html(m.get_root().render(), height=630, scrolling=False)
-    st.caption("El mapa base requiere conexión a Internet; las coordenadas, tablas y GeoJSON funcionan sin él.")
+    st.caption("Mapa de calles: © OpenStreetMap contributors. No requiere API key. "
+               "Amplía con + para distinguir avenidas, calles e intersecciones. "
+               "Las teselas del mapa necesitan Internet; el análisis y las exportaciones no.")
 with data_tab:
     vc = puntos_m.tipo_riesgo.value_counts().rename_axis("tipo_riesgo").reset_index(name="incidentes")
     st.bar_chart(vc, x="tipo_riesgo", y="incidentes", use_container_width=True)
