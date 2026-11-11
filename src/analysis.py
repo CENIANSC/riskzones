@@ -22,7 +22,7 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 
 SEED = 42
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 REQUIRED = ("latitud", "longitud", "tipo_riesgo")
 
 

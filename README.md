@@ -1,131 +1,126 @@
-# Riesgos Urbanos — análisis geoespacial multirriesgo con Streamlit
+# Riesgos Urbanos + CVRP · Streamlit (versión 1.2)
 
-Aplicación Python/Streamlit para agrupar **cualquier número de tipos de riesgo** registrados en **un único archivo Excel, primera hoja**, con las columnas `latitud`, `longitud` y `tipo_riesgo`. El programa crea círculos de cobertura, envolventes convexas, intersecciones de zonas de tipos diferentes, mapa interactivo y exportaciones listas para QGIS.
+Aplicación de análisis espacial multirriesgo (**K-Means, geometrías y empalmes**) que incorpora un **módulo de ruteo capacitado (CVRP)** con tres heurísticas para comparar distancia recorrida y longitud expuesta a zonas de conflicto.
 
-> **Naturaleza de los resultados.** Es una herramienta de exploración geoespacial. K-Means y los polígonos derivados de sus centroides **no demuestran riesgo causal, probabilidad de accidente/delito, ni puntos críticos estadísticamente significativos**. Tampoco constituye un solucionador de rutas CVRP. Los puntos del ejemplo son inventados para pruebas.
+> **Límites científicos:** los riesgos son geometrías exploratorias derivadas de K-Means, **no probabilidades de siniestros ni indicadores estadísticamente validados de peligro**. Los algoritmos CVRP son **heurísticos y no certifican optimalidad**. Los datos de ejemplo son **inventados**. Para rutas transitables por calles se requiere una **red vial GeoJSON real, topológicamente conectada, exportada desde QGIS**; el mapa base de OpenStreetMap por sí solo no suministra un grafo para calcular caminos.
 
-## Cambios en la versión 1.1.0: calles y mapa sin clave API
+## Ejecutar o desplegar
 
-El mapa base ahora utiliza **OpenStreetMap estándar** mediante Folium, con nombres de calles y vialidades al acercar el zoom. Sustituye a `CartoDB positron`, cuyas teselas exigen clave API desde septiembre de 2026. No debes configurar ninguna clave para esta versión; solo se necesita conexión a Internet en el navegador para cargar el mapa base.
+Recomendado: **Python 3.11 o 3.12**.
 
-**Actualizar un repositorio existente:** reemplaza `src/visualizacion.py`, `app.py`, `src/analysis.py` y `README.md` (o sube todos los archivos de esta versión conservando tu estructura). Haz commit en GitHub; Streamlit Community Cloud suele redeplegar al detectar cambios en la rama. Recarga el navegador con **Ctrl+F5** para descartar teselas antiguas guardadas en caché.
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
 
-Si no ves calles, comprueba que tu navegador/red permita cargar `https://tile.openstreetmap.org/`. La visualización de incidentes, zonas y empalmes sigue siendo la misma; no se cambia el algoritmo de agrupamiento ni las exportaciones.
+- En GitHub, sube el **contenido de esta carpeta** al repositorio, no el ZIP como único archivo. `app.py` y `requirements.txt` deben estar en la raíz.
+- En Streamlit Community Cloud (`https://share.streamlit.io/`), conecta el repositorio y selecciona `app.py`.
+- Este proyecto no necesita clave API para el **mapa base** de OpenStreetMap. Las teselas requieren Internet y están sujetas a la [política de uso OSM](https://operations.osmfoundation.org/policies/tiles/).
 
-**Atribución:** © OpenStreetMap contributors. Para tráfico elevado o proyectos comerciales, revisa la [política de uso de teselas de OSM](https://operations.osmfoundation.org/policies/tiles/), pues el servicio público no garantiza disponibilidad ilimitada.
+## Entradas de la aplicación
 
-## 1. Archivo Excel de entrada
+### 1. Riesgos urbanos (Excel, una sola pestaña)
 
-Incluye `data/riesgos_ejemplo_irapuato.xlsx` con **una sola hoja** denominada `Riesgos` y 150 filas simuladas:
+`data/riesgos_ejemplo_irapuato.xlsx` contiene **100 accidentes + 50 eventos de inseguridad ficticios**, con tres columnas:
 
-| A: latitud | B: longitud | C: tipo_riesgo |
-|---|---|---|
+| latitud | longitud | tipo_riesgo |
+|---:|---:|---|
 | 20.692563 | -101.330562 | Accidentes |
 | 20.682141 | -101.360585 | Inseguridad |
 
-- **100** registros de Accidentes y **50** de Inseguridad.
-- Las coordenadas corresponden al entorno urbano de Irapuato, **no se garantiza** que cada punto pertenezca al municipio oficial sin usar su polígono territorial.
-- Puedes agregar filas con `Bloqueos`, `Inundaciones`, `Robos`, etc., sin modificar el código.
-- La app lee **la primera hoja**, incluso si el Excel tiene otras, y conserva cada registro repetido como posible evento separado.
-- Entrada estándar en **EPSG:4326**: latitud en A, longitud en B. No se aceptan coordenadas UTM en la entrada.
-- Por rendimiento se limitan las cargas a 30 000 registros y 20 clases por ejecución; los límites pueden modificarse en `src/analysis.py` si cuentas con infraestructura apropiada.
+La app identifica las etiquetas, acepta tipos adicionales y crea agrupamientos/empalmes. La primera hoja se procesa; todas las coordenadas están en **EPSG:4326**.
 
-## 2. Ejecutar en Windows
+### 2. Clientes (CSV o Excel, primera hoja)
 
-Recomendado: Python **3.11**.
+`data/clientes_ejemplo_irapuato.csv` incluye **25 clientes ficticios**:
 
-1. Descomprime la carpeta del proyecto.
-2. Abre una terminal dentro de la carpeta (donde está `app.py`).
-3. Ejecuta:
+| cliente | latitud | longitud | demanda |
+|---|---:|---:|---:|
+| C01 | 20.691... | -101.35... | 1... |
 
-```bat
-py -3 -m pip install -r requirements.txt
-py -3 -m streamlit run app.py
-```
+`cliente` único; `demanda` estrictamente positiva, en las **mismas unidades que la capacidad vehicular** (por ejemplo, cajas). La ubicación del depósito se configura en la interfaz. Cada cliente se visita **exactamente una vez** y todos los vehículos regresan al depósito. La flota tiene capacidad homogénea; se pueden dejar vehículos sin usar. Límite prototipo de **70 clientes** por ejecución.
 
-También se incluye `ejecutar_windows.bat` para instalar las dependencias y abrir Streamlit desde Windows.
+### 3. Red vial (opcional, GeoJSON exportado desde QGIS)
 
-## 3. Subir a GitHub y publicar en Streamlit Community Cloud
+Este archivo habilita rutas sobre calles **sin API de terceros**. Debe contener `LineString` o `MultiLineString` en EPSG:4326, con **intersecciones conectadas mediante vértices comunes** (los cruces meramente visuales no están conectados). Cada segmento que pueda ser recorrido en ambos sentidos se considera bidireccional; `oneway=yes`, `1` o `true` marca el tramo como unidireccional en el sentido de la digitalización. No se modelan giros prohibidos, velocidades, pendientes, tráfico ni horarios de circulación.
 
-1. Crea un repositorio nuevo en <https://github.com/new> (por ejemplo `riesgos-urbanos`).
-2. **Descomprime** el archivo ZIP descargado e incorpora los archivos del proyecto a la **raíz del repositorio**, de modo que `app.py`, `requirements.txt` y `data/` aparezcan en la raíz. No subas solamente el ZIP.
-3. Abre <https://share.streamlit.io/> e inicia sesión con GitHub.
-4. Selecciona **Create app**, tu repositorio, rama `main` y archivo principal `app.py`.
-5. En configuración avanzada, selecciona **Python 3.11** si la plataforma permite elegirlo.
-6. Despliega la aplicación. En la primera apertura aparecerá el conjunto de prueba incluido.
-7. Descarga el Excel de ejemplo, modifica/agrega incidentes y súbelo a la aplicación.
+**Preparación en QGIS:**
 
-El repositorio incluye `requirements.txt` y `.streamlit/config.toml` para que Streamlit instale las dependencias y configure la interfaz.
+1. Descarga o importa la red de calles que cubra **depósito, clientes y posibles desvíos** de Irapuato; por ejemplo, desde datos OSM mediante QuickOSM.
+2. Recorta el área, corrige geometrías, **noda/splitea las intersecciones** y asegúrate de que los componentes de la red estén conectados; conserva el atributo `oneway` cuando sea fiable.
+3. Exporta `GeoJSON`, CRS `EPSG:4326`, con una selección de calles aptas para el vehículo. Se admite un máximo preventivo de ~**12 000 vértices** y **22 MB** de GeoJSON para Streamlit Community Cloud.
+4. Sube ese archivo en la sección CVRP y aumenta la tolerancia de conexión únicamente cuando sea justificable. El programa comprueba alcanzabilidad entre todos los puntos.
 
-**Privacidad:** Si publicas la app, otras personas podrán acceder a ella. La aplicación no guarda archivos de entrada en una base de datos y crea las exportaciones en memoria, pero los archivos se procesan temporalmente en el servidor. No utilices datos de víctimas, domicilios particulares o registros sensibles sin anonimizar, justificar el tratamiento y controlar el acceso.
+**Sin red GeoJSON**, la opción geométrica calcula distancias euclidianas en la proyección UTM y dibuja líneas rectas **no transitables**. No se debe usar para afirmar evitación real de zonas por carretera.
 
-## 4. Flujo del algoritmo
+## Función objetivo
 
-```text
-Excel: latitud | longitud | tipo_riesgo (A:B:C)
-    ↓
-Validación de datos y clasificación por nombre de riesgo
-    ↓
-Filtro espacial opcional: sin filtro / círculo urbano / polígono GeoJSON
-    ↓
-Proyección WGS84 → UTM local (distancias en metros)
-    ↓
-Por cada tipo: K sugerido (silueta) o elegido por el usuario
-    ↓
-K-Means (semilla 42) → centros, puntos asignados, cantidad de incidentes
-    ↓
-Zonas circulares [radio = max(distancia máxima al centro, radio mínimo)]
-+ Envolventes convexas con buffer
-    ↓
-Zonas individuales (incluso sin empalme)
-    ↓
-Unión de círculos por riesgo + partición por tipos de riesgo coincidentes
-    ↓
-Mapa, tablas, GeoJSON, CSV y manifiesto JSON SHA-256 para QGIS
-```
+La app compara una referencia optimizada **solo por distancia** (`λ=0`) contra métodos que minimizan:
 
-### Elección de K
+\[
+Z = D + \lambda E
+\]
 
-La app calcula el índice de silueta para K entre 2 y una cantidad moderada de grupos en cada categoría, cuando el número de coordenadas lo permite. La sugerencia es **puramente geométrica**. El operador puede ajustar manualmente K por riesgo y repetir análisis de sensibilidad. Con menos de cuatro coordenadas distintas se sugiere K=1. El radio mínimo (80 m por defecto) impide que los grupos unitarios produzcan círculos de radio cero, pero es un **parámetro modelado** y debe justificarse con datos reales cuando se publique.
+- `D`: metros recorridos en la red vial suministrada (o distancia geométrica, si no hay red).
+- `E`: metros del recorrido dentro de las zonas seleccionadas: **solo empalmes** o **todas las zonas**. La unión espacial evita contar varias veces la longitud dentro de zonas superpuestas.
+- `λ`: coeficiente adimensional >=0 que expresa la importancia relativa de evitar exposición.
+- `Z`: costo generalizado en metros equivalentes; **no representa kilómetros físicos**.
 
-### Intersecciones de varios riesgos
+En modo vial, cada camino entre dos destinos es el **camino mínimo ponderado** en una red dirigida, con costo por segmento `longitud + λ × longitud_en_zona`. Se calculan matrices de distancia física y exposición **del camino elegido**, luego se resuelve el CVRP de asignación y secuenciación. Por ello **no basta mirar el mapa OSM**; se requiere GeoJSON de calles si se quiere un desvío real.
 
-Las zonas individuales **se conservan siempre** salvo que el usuario active un umbral mínimo de incidentes que las descarte de las intersecciones. Las zonas de un mismo riesgo se unen antes de comparar diferentes categorías. Una partición incremental evita contar dos veces una misma superficie. Así se distinguen regiones con `Accidentes + Inseguridad` y aquellas con `Accidentes + Inseguridad + Inundaciones`. El empalme **no implica correlación estadística ni causalidad**.
+## Tres opciones de solución (sin depender de OR-Tools)
 
-### Filtros territoriales
+| Alternativa | Implementación | Uso |
+|---|---|---|
+| **Búsqueda local** | Empaque factible, inserción de menor costo, `2-opt`, reubicaciones/intercambios | Referencia rápida |
+| **Búsqueda tabú** | Arranca con búsqueda local; explora vecinos, lista tabú con aspiración y reintensificación | Escape de mínimos locales |
+| **ACO** | Feromonas, construcción estocástica restringida por capacidad, evaporación, refuerzo de mejores recorridos y mejora local | Diversificación |
 
-- **Sin filtro**: utiliza todos los registros válidos; predeterminado.
-- **Radio urbano**: círculo ajustable alrededor de coordenadas elegidas. **No sustituye el polígono municipal**.
-- **Límite municipal (GeoJSON)**: permite cargar un polígono territorial oficial desde QGIS, en EPSG:4326, para conservar solamente los puntos dentro del municipio.
+La asignación inicial de clientes a vehículos usa un empaque con retroceso acotado para respetar capacidad; si no encuentra uno factible, informa el problema en vez de devolver rutas inválidas. Cada técnica devuelve distancia física, exposición, costo penalizado, cantidad de vehículos utilizados, cargas y tiempo de cómputo. La **semilla aleatoria** es configurable.
 
-## 5. Archivos ZIP exportados
+**Nota:** esto es un prototipo académico, no implementaciones canónicas validadas de ACO/Tabú contra todas las instancias CVRPLIB. La mejora de calidad debe comprobarse con experimentos multisemilla, diversidad de instancias y comparaciones contra OR-Tools/soluciones conocidas.
 
-| Archivo | Descripción |
-|---|---|
-| `puntos.geojson` | Puntos individuales en WGS84 (para mapa QGIS) |
-| `puntos.csv` | Tabla con tipo de riesgo, clúster, identificador de zona y fila original |
-| `zonas_circulares.geojson` | Regiones geométricas por riesgo |
-| `envolventes_convexas.geojson` | Envolventes opcionales con buffer |
-| `empalmes_multirriesgo.geojson` | Regiones compartidas por 2 o más tipos distintos |
-| `resumen_zonas.csv` | Incidentes, radio, superficies y centroides |
-| `resumen_empalmes.csv` | Riesgos presentes y superficie de cada coincidencia |
-| `manifiesto_metodologico.json` | SHA-256 del Excel, parámetros, fecha UTC, CRS y versiones de biblioteca |
-| `LEEME_QGIS.txt` | Pasos de importación a QGIS |
+## Ejemplo paso a paso
 
-**QGIS:** `Capa > Añadir capa > Añadir capa vectorial` para cada GeoJSON. Para medir geometrías, trabaja en CRS proyectado. El GeoJSON se exporta en EPSG:4326; los campos `radio_m` y `area_m2` provienen del análisis UTM.
+1. Publica la app y abre el conjunto ficticio de riesgos incluido.
+2. Ajusta K por cada tipo si lo consideras necesario; visualiza empalmes en el mapa.
+3. Desplázate a **CVRP** y carga `clientes_ejemplo_irapuato.csv` o utiliza el ejemplo incluido.
+4. Indica número de vehículos y capacidad. El ejemplo usa **5 vehículos de 25 unidades**.
+5. Selecciona **Solo empalmes** o **Todas las zonas** y cambia `λ` (por ejemplo, 0 / 5 / 15).
+6. Elige **las tres heurísticas** y haz clic en *Resolver y comparar rutas CVRP*.
+7. Examina tabla, mapa y rutas por vehículo, y descarga el ZIP de resultados para QGIS.
+8. Cuando tengas un GeoJSON **real y conectado** de las calles, selecciona *Red vial GeoJSON* y repite el análisis para comparar rutas transitables.
 
-## 6. Pruebas automatizadas
+## Exportaciones CVRP
+
+- `comparativo_algoritmos.csv`: distancia, exposición, costo, vehículos usados, duración.
+- `rutas_clientes.csv`: secuencia de clientes por ruta.
+- `clientes.csv`: entradas analizadas.
+- `rutas.geojson`: rutas por vehículo y por algoritmo, EPSG:4326.
+- `manifiesto_cvrp.json`: parámetros, fecha UTC, SHA-256 de clientes/riesgos/red vial y semilla.
+
+El ZIP de **análisis de riesgos** sigue disponible por separado (zonas circulares, empalmes, centroides, CSV y manifestación).
+
+## Pruebas
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-Revisan estructura del Excel, geoproyección, sugerencia de K, agrupamientos, filtros, empalmes sin doble conteo, incorporación de un tercer riesgo y exportación ZIP/QGIS.
+Incluyen validación de riesgo, varios tipos de eventos, GeoJSON de calles, conectividad, capacidad, cobertura de todos los clientes, tres algoritmos y prueba de desvío por riesgo.
 
-## 7. Uso académico y límites
+## ¿Por qué no incluimos una cuarta opción cuántica?
 
-Para sustentar una publicación sobre riesgos viales, son necesarios datos documentados, validación de geocodificación, fecha/hora, denominadores de exposición al tránsito, análisis de sensibilidad espacial, comparación con KDE/Gi* y análisis de subregistro cuando corresponda. El paquete **no** entrega esas inferencias automáticamente.
+La computación cuántica se investiga para CVRP mediante **QUBO, QAOA, quantum annealing** y algoritmos híbridos. Actualmente no garantiza soluciones mejores o más rápidas para instancias urbanas grandes frente a métodos clásicos. Incluir un botón cuántico en esta aplicación sin procesador cuántico ni un benchmark válido sería engañoso. Una futura versión experimental podría incorporar instancias pequeñas y comparar calidad/tiempo de optimización **incluyendo transferencia y preparación de datos**, con recursos y acceso autorizados a hardware cuántico.
 
-El código es un prototipo propio rediseñado a partir del cuaderno del usuario. No se incluye licencia de redistribución: el titular debe decidir deliberadamente la licencia del repositorio antes de hacerlo público.
+Lecturas recomendadas:
+- Google OR-Tools CVRP: https://developers.google.com/optimization/routing/cvrp
+- OR-Tools opciones heurísticas: https://developers.google.com/optimization/routing/routing_options
+- *Applying analog quantum computing to solve optimisation problems: case studies on Max-Cut and CVRP* (2025): https://doi.org/10.1080/23302674.2025.2463530
+- Revisión de optimización cuántica logística (2025): https://www.mdpi.com/2624-6511/8/6/206
 
-Más detalle: [docs/METODOLOGIA.md](docs/METODOLOGIA.md).
+## Límites y ética
+
+No publicar nombres, domicilios ni detalles identificables de víctimas; el servidor procesa los archivos durante la sesión. K-Means no sustituye análisis de siniestralidad con tasas de exposición al flujo vehicular ni valida estadísticamente puntos críticos. En red vial, la fidelidad de los recorridos depende de la calidad de topología y atributos de la capa (incluidos sentidos). La red descargada de OSM puede incluir errores o no tener toda la información operativa. Antes de emplear rutas en campo, verificar legalidad, seguridad, accesibilidad y restricciones en terreno. **Nunca desplegar itinerarios calculados aquí sin validación previa.**
+
+No se incluye licencia de software: determina la licencia y créditos antes de publicarlo.

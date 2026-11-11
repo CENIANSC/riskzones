@@ -1,7 +1,4 @@
-"""Riesgos Urbanos · aplicación Streamlit para datos georreferenciados.
-
-NO es un modelo predictivo de siniestros/delitos ni un solucionador CVRP.
-"""
+"""Riesgos Urbanos · aplicación Streamlit multirriesgo + CVRP heurístico."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -21,7 +18,7 @@ from src.exportacion import crear_paquete
 from src.visualizacion import mapa
 
 st.set_page_config(page_title="Riesgos Urbanos · K-Means", page_icon="🗺️", layout="wide")
-st.title("Riesgos urbanos | Análisis espacial multirriesgo")
+st.title("Riesgos urbanos | K-Means y CVRP")
 st.caption(f"Versión {APP_VERSION} · K-Means por tipo de riesgo · exportación QGIS/GeoJSON · enfoque exploratorio")
 st.info("Las zonas representan agrupamientos geométricos, NO probabilidades ni niveles comprobados de peligro. "
         "Los puntos del ejemplo son simulados; sustituye el archivo para investigar datos reales.")
@@ -193,7 +190,7 @@ with meth_tab:
 6. Conservar zonas de cada tipo por separado; disolver zonas del mismo tipo y efectuar superposiciones entre **tipos distintos**. Las regiones resultantes son disjuntas y permiten evaluar coincidencias de dos o más categorías sin contarlas dos veces.
 7. Exportar CSV, GeoJSON en WGS84 y manifiesto metodológico con SHA-256, filtros, parámetros, software y proyección.
 
-**Limitaciones:** K-Means no demuestra *hotspots* estadísticamente significativos, y la densidad de registros no equivale a tasa de riesgo sin exposición vial, subregistro, temporalidad y validación. Las zonas no representan barreras físicas. La optimización CVRP no está incluida en esta versión.
+**Limitaciones:** K-Means no demuestra *hotspots* estadísticamente significativos, y la densidad de registros no equivale a tasa de riesgo sin exposición vial, subregistro, temporalidad y validación. Las zonas no representan barreras físicas. El módulo CVRP se encuentra al final de esta página; no garantiza el óptimo global.
 """)
     st.json({"modo_area": modo, "epsg_calculos": epsg, "K_por_riesgo": config_k,
              "radio_minimo_m": radio_min, "umbral_eventos": int(min_puntos),
@@ -223,3 +220,9 @@ st.download_button("⬇️ Descargar resultados para QGIS y manifiesto (ZIP)",
                    mime="application/zip", type="primary")
 st.caption("Los archivos que subes se procesan en memoria durante la sesión. "
            "No publiques datos sensibles o identificables en una aplicación pública.")
+
+
+st.divider()
+from src.cvrp_ui import bloque_cvrp
+bloque_cvrp(zonas=zonas,empalmes=empalmes,to_m=to_m,to_geo=to_geo,epsg=epsg,
+            risk_bytes=contenido,config_k=config_k)
