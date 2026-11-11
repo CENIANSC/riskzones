@@ -8,3 +8,4 @@ pyproj>=3.6,<4
 folium>=0.17,<1
 networkx>=3.2,<4
 scipy>=1.11,<2
+osmnx>=2.1,<3

@@ -17,8 +17,9 @@ from src.cvrp_experimentos import (crear_circulos_empalmes, matriz_articulo,
     matriz_vial_experimental, cantidad_cruces)
 from src.cvrp_export import zip_cvrp
 from src.cvrp_viz import mapa_cvrp
+from src.red_vial_osm import descargar_red_osm
 
-VERSION_INTERFAZ_CVRP = '1.3.4'
+VERSION_INTERFAZ_CVRP = '1.3.5'
 
 TECNICAS = ['Búsqueda local', 'Búsqueda tabú', 'Colonia de hormigas (ACO)']
 ROOT=Path(__file__).resolve().parents[1]
@@ -53,7 +54,7 @@ $$ c_{ij}=d_{ij}\left[1+\lambda\sum_k\delta_{ij}^{k}(1-\max(\gamma_i^k,\gamma_j^
 Los extremos situados dentro de la zona no activan penalización en ese arco;
 siempre se atiende a los clientes. **No representa la distancia por calles.**
 
-**Modo B · extensión por QGIS:** importa calles conectadas y minimiza caminos
+**Modo B · extensión vial:** descarga OpenStreetMap o importa calles conectadas y minimiza caminos
 ponderados por tramo: $\sum_e (d_e+\lambda\,\ell_{e\cap R})$.
 La penalización es **aditiva por longitud de calle expuesta**, diferente de
 la formulación multiplicativa por arco del artículo. La red debe tener
@@ -119,18 +120,63 @@ ni considerar las rutas rectas como transitables.
           key='exp_risk_area')
         if alcance.startswith('Círculos individuales'):
             circulos=[{**z,'riesgos':z.get('tipo_riesgo','')} for z in zonas]
-        roadfile=st.file_uploader('Sube GeoJSON de vialidades conectado (QGIS · WGS84)',
-             type=['geojson','json'],key='exp_roads')
+        fuente_vial=st.radio('Fuente de vialidades',
+            ['Descargar calles REALES de OpenStreetMap (OSMnx)',
+             'Cargar red vial propia (GeoJSON de QGIS)',
+             'Red ARTIFICIAL solo para pruebas'],
+            key='exp_road_source')
         max_snap=float(st.number_input('Distancia máxima de conexión de clientes (metros)',
              min_value=10.,max_value=1500.,value=250.,step=10.,key='exp_snap'))
-        st.caption('La capa debe incluir calles LINESTRING con intersecciones cortadas y conectadas. '
-                   'Respeta `oneway` si la propiedad está presente. No se descargan calles automáticamente.')
-        st.download_button('Descargar red vial ARTIFICIAL para comprobar el modo B (NO es Irapuato real)',
-             DEMO_ROADS.read_bytes(), file_name='red_vial_ARTIFICIAL_pruebas.geojson',
-             mime='application/geo+json',key='demo_roads')
-        roadbytes=roadfile.getvalue() if roadfile is not None else None
-        if roadbytes is None:
-            st.info('Para el modo B sube un GeoJSON vial de QGIS. Puedes usar también la red artificial incluida en el repositorio para pruebas.')
+        if fuente_vial.startswith('Descargar'):
+            st.markdown('**Descarga bajo demanda:** obtiene las calles para vehículos de OpenStreetMap. '
+                'No utiliza tráfico en tiempo real y requiere conexión del servidor Streamlit a Overpass.')
+            c_lat,c_lon,c_radius=st.columns(3)
+            with c_lat:
+                osm_lat=float(st.number_input('Centro de descarga · latitud',
+                    value=float(dep_lat),format='%.6f',key='osm_lat'))
+            with c_lon:
+                osm_lon=float(st.number_input('Centro de descarga · longitud',
+                    value=float(dep_lon),format='%.6f',key='osm_lon'))
+            with c_radius:
+                osm_radius=int(st.number_input('Radio (m) · comenzar con 2,500',
+                    min_value=500,max_value=5000,value=2500,step=250,key='osm_radius'))
+            request_key=(osm_lat,osm_lon,osm_radius)
+            if st.button('🌐 Descargar red vial REAL de OpenStreetMap',key='osm_download'):
+                try:
+                    with st.spinner('Solicitando calles a OpenStreetMap (Overpass)…'):
+                        from src.red_vial_osm import descargar_red_osm
+                        road_download,road_meta=descargar_red_osm(osm_lat,osm_lon,osm_radius)
+                    st.session_state['osm_vial_v135']={'request':request_key,
+                        'bytes':road_download,'meta':road_meta}
+                except CVRPError as exc:
+                    st.error(str(exc))
+                    st.session_state.pop('osm_vial_v135',None)
+            cached=st.session_state.get('osm_vial_v135')
+            if cached and cached['request']==request_key:
+                roadbytes=cached['bytes']
+                meta=cached['meta']
+                st.success(f"Red OSM lista: {meta['nodos_osmnx']:,} nodos y "
+                    f"{meta['arcos_dirigidos']:,} arcos dirigidos. Fuente: OpenStreetMap.")
+                st.download_button('⬇️ Guardar red vial REAL como GeoJSON reutilizable',
+                    data=roadbytes,file_name=f'irapuato_osm_drive_{osm_radius}m.geojson',
+                    mime='application/geo+json',key='osm_save')
+                st.caption('Las calles son reales según OpenStreetMap; su conectividad, '
+                    'sentidos y restricciones deben verificarse antes de conclusiones operativas.')
+            elif cached:
+                st.info('Cambiaste el área: descarga nuevamente la red para los parámetros actuales.')
+            else:
+                st.info('Descarga una red, o utiliza la alternativa de importación GeoJSON.')
+        elif fuente_vial.startswith('Cargar'):
+            roadfile=st.file_uploader('Sube GeoJSON vial de QGIS (EPSG:4326) con líneas conectadas',
+                type=['geojson','json'],key='exp_roads')
+            roadbytes=roadfile.getvalue() if roadfile is not None else None
+            st.caption('La red debe tener intersecciones topológicamente conectadas y atributo oneway cuando corresponda.')
+        else:
+            roadbytes=DEMO_ROADS.read_bytes()
+            st.warning('Esta red es ARTIFICIAL. Úsala únicamente para pruebas de software.')
+            st.download_button('Descargar red vial ARTIFICIAL',roadbytes,
+                file_name='red_vial_ARTIFICIAL_pruebas.geojson',
+                mime='application/geo+json',key='demo_roads')
     else:
         st.info('Modo A: solo se penalizan **círculos derivados de empalmes**. Los segmentos son rectos y la distancia es Haversine.')
 

@@ -22,7 +22,7 @@ from src.cvrp_experimentos import crear_circulos_empalmes
 
 st.set_page_config(page_title="Riesgos Urbanos · K-Means + CVRP A/B", page_icon="🗺️", layout="wide")
 st.title("Riesgos urbanos | K-Means y CVRP de dos modos")
-st.caption("Paquete integrado 1.3.4 · compatibilidad de mapa y CVRP verificada")
+st.caption("Paquete integrado 1.3.5 · compatibilidad de mapa y CVRP verificada")
 st.caption(f"Versión {APP_VERSION} · K-Means por tipo de riesgo · exportación QGIS/GeoJSON · enfoque exploratorio")
 st.info("Las zonas representan agrupamientos geométricos, NO probabilidades ni niveles comprobados de peligro. "
         "Los puntos del ejemplo son simulados; sustituye el archivo para investigar datos reales.")
@@ -44,7 +44,7 @@ except (AttributeError, TypeError, ValueError):
 _missing_map = sorted(_REQUIRED_MAP_ARGS - _map_args)
 if _map_version != _MAP_VERSION_EXPECTED or _missing_map:
     st.error('Los archivos de la aplicación y del mapa pertenecen a versiones diferentes. '
-             'Reemplaza app.py y toda la carpeta src/ con los del mismo ZIP v1.3.4.')
+             'Reemplaza app.py y toda la carpeta src/ con los del mismo ZIP v1.3.5.')
     st.code('Versión de mapa instalada: ' + str(_map_version or 'anterior o sin etiqueta')
             + '\nParámetros faltantes: ' + str(_missing_map or 'ninguno'), language='text')
     st.stop()
@@ -308,9 +308,9 @@ try:
 except (TypeError, ValueError, AttributeError):
     _arguments = set()
 _missing = sorted(_EXPECTED_CVRP_ARGS - _arguments)
-if _ui_version != '1.3.4' or _missing:
+if _ui_version != '1.3.5' or _missing:
     st.error('Se detectó una mezcla de archivos de versiones diferentes. '
-             'Actualiza el proyecto completo desde el ZIP 1.3.4, no únicamente app.py. '
+             'Actualiza el proyecto completo desde el ZIP 1.3.5, no únicamente app.py. '
              'La función CVRP no coincide con los parámetros que envía la interfaz.')
     st.code(f'Interfaz instalada: {_ui_version or "sin versión"}\n'
             f'Parámetros faltantes: {_missing or "ninguno"}', language='text')
@@ -323,9 +323,9 @@ try:
 except TypeError as _err:
     # El detalle se conserva en los logs de Streamlit, sin imprimir ubicaciones
     # sensibles ni contenidos del Excel en la interfaz pública.
-    logging.getLogger(__name__).exception('CVRP TypeError en versión integrada 1.3.4')
+    logging.getLogger(__name__).exception('CVRP TypeError en versión integrada 1.3.5')
     st.error('El módulo CVRP produjo un TypeError interno. La compatibilidad entre '
              'archivos ya fue verificada: revisa Manage app → Logs y comparte la '
              'última línea y el marco interno del traceback para diagnosticarlo.')
-    st.caption(f'Tipo de excepción: {type(_err).__name__} · paquete 1.3.4')
+    st.caption(f'Tipo de excepción: {type(_err).__name__} · paquete 1.3.5')
     st.stop()
