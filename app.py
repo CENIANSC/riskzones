@@ -17,15 +17,38 @@ from src.analysis import (
     APP_VERSION,
 )
 from src.exportacion import crear_paquete
-from src.visualizacion import mapa
+from src import visualizacion as _visualizacion
 from src.cvrp_experimentos import crear_circulos_empalmes
 
 st.set_page_config(page_title="Riesgos Urbanos · K-Means + CVRP A/B", page_icon="🗺️", layout="wide")
 st.title("Riesgos urbanos | K-Means y CVRP de dos modos")
-st.caption("Paquete integrado 1.3.3 · círculos de empalme visibles · control de compatibilidad CVRP")
+st.caption("Paquete integrado 1.3.4 · compatibilidad de mapa y CVRP verificada")
 st.caption(f"Versión {APP_VERSION} · K-Means por tipo de riesgo · exportación QGIS/GeoJSON · enfoque exploratorio")
 st.info("Las zonas representan agrupamientos geométricos, NO probabilidades ni niveles comprobados de peligro. "
         "Los puntos del ejemplo son simulados; sustituye el archivo para investigar datos reales.")
+
+# Verificación temprana del módulo de mapa: impide el TypeError de parámetros
+# si GitHub/Streamlit mezclaron versiones de app.py y src/visualizacion.py.
+_REQUIRED_MAP_ARGS = {
+    'puntos', 'zonas', 'envolventes', 'empalmes', 'to_geo',
+    'mostrar_puntos', 'mostrar_hulls', 'mostrar_empalmes',
+    'mostrar_circulos_conflicto', 'mostrar_centros_conflicto', 'limite_original',
+}
+_MAP_VERSION_EXPECTED = '1.3.4'
+_map_version = getattr(_visualizacion, 'VERSION_VISUALIZACION', None)
+try:
+    _map_signature = inspect.signature(_visualizacion.mapa)
+    _map_args = set(_map_signature.parameters)
+except (AttributeError, TypeError, ValueError):
+    _map_args = set()
+_missing_map = sorted(_REQUIRED_MAP_ARGS - _map_args)
+if _map_version != _MAP_VERSION_EXPECTED or _missing_map:
+    st.error('Los archivos de la aplicación y del mapa pertenecen a versiones diferentes. '
+             'Reemplaza app.py y toda la carpeta src/ con los del mismo ZIP v1.3.4.')
+    st.code('Versión de mapa instalada: ' + str(_map_version or 'anterior o sin etiqueta')
+            + '\nParámetros faltantes: ' + str(_missing_map or 'ninguno'), language='text')
+    st.stop()
+
 
 PATH_EJEMPLO = Path(__file__).resolve().parent / "data" / "riesgos_ejemplo_irapuato.xlsx"
 base_bytes = PATH_EJEMPLO.read_bytes()
@@ -181,12 +204,22 @@ with map_tab:
     if len(puntos_m) > 3000:
         st.info("Para mantener fluido el mapa se visualiza una muestra reproducible de 3 000 puntos. "
                 "La exportación incluye todos los registros.")
-    m, _ = mapa(puntos=clasificados, zonas=zonas, envolventes=envolventes,
-                empalmes=empalmes, to_geo=to_geo, mostrar_puntos=vis_puntos,
-                mostrar_hulls=vis_hulls, mostrar_empalmes=vis_overlap,
-                mostrar_circulos_conflicto=vis_circles, mostrar_centros_conflicto=vis_centers,
-                limite_original=limite)
-    components.html(m.get_root().render(), height=630, scrolling=False)
+    try:
+        m, _ = _visualizacion.mapa(
+            puntos=clasificados, zonas=zonas, envolventes=envolventes,
+            empalmes=empalmes, to_geo=to_geo, mostrar_puntos=vis_puntos,
+            mostrar_hulls=vis_hulls, mostrar_empalmes=vis_overlap,
+            mostrar_circulos_conflicto=vis_circles,
+            mostrar_centros_conflicto=vis_centers, limite_original=limite,
+        )
+        components.html(m.get_root().render(), height=630, scrolling=False)
+    except TypeError:
+        # Streamlit oculta el mensaje original; conservarlo en los logs del servidor.
+        logging.getLogger(__name__).exception('Error de TypeError en mapa v1.3.4')
+        st.error('El renderizado del mapa falló con TypeError. La versión y la firma '
+                 'del módulo ya se comprobaron: consulta Manage app → Logs para '
+                 'identificar la última llamada interna que falló.')
+        st.stop()
     st.caption("Mapa de calles: © OpenStreetMap contributors. No requiere API key. "
                "Amplía con + para distinguir avenidas, calles e intersecciones. "
                "Las teselas del mapa necesitan Internet; el análisis y las exportaciones no.")
@@ -275,9 +308,9 @@ try:
 except (TypeError, ValueError, AttributeError):
     _arguments = set()
 _missing = sorted(_EXPECTED_CVRP_ARGS - _arguments)
-if _ui_version != '1.3.3' or _missing:
+if _ui_version != '1.3.4' or _missing:
     st.error('Se detectó una mezcla de archivos de versiones diferentes. '
-             'Actualiza el proyecto completo desde el ZIP 1.3.3, no únicamente app.py. '
+             'Actualiza el proyecto completo desde el ZIP 1.3.4, no únicamente app.py. '
              'La función CVRP no coincide con los parámetros que envía la interfaz.')
     st.code(f'Interfaz instalada: {_ui_version or "sin versión"}\n'
             f'Parámetros faltantes: {_missing or "ninguno"}', language='text')
@@ -290,9 +323,9 @@ try:
 except TypeError as _err:
     # El detalle se conserva en los logs de Streamlit, sin imprimir ubicaciones
     # sensibles ni contenidos del Excel en la interfaz pública.
-    logging.getLogger(__name__).exception('CVRP TypeError en versión integrada 1.3.3')
+    logging.getLogger(__name__).exception('CVRP TypeError en versión integrada 1.3.4')
     st.error('El módulo CVRP produjo un TypeError interno. La compatibilidad entre '
              'archivos ya fue verificada: revisa Manage app → Logs y comparte la '
              'última línea y el marco interno del traceback para diagnosticarlo.')
-    st.caption(f'Tipo de excepción: {type(_err).__name__} · paquete 1.3.3')
+    st.caption(f'Tipo de excepción: {type(_err).__name__} · paquete 1.3.4')
     st.stop()

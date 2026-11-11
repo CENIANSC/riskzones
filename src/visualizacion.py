@@ -10,6 +10,8 @@ from pyproj import Transformer
 from shapely.ops import transform
 from src.cvrp_experimentos import crear_circulos_empalmes
 
+VERSION_VISUALIZACION = '1.3.4'
+
 COLORS = ["#2563EB", "#DC2626", "#059669", "#A855F7", "#EA580C", "#0891B2",
           "#C026D3", "#B45309", "#64748B", "#65A30D", "#C2410C", "#0F766E"]
 

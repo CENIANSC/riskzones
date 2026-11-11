@@ -1,3 +1,19 @@
+# Corrección v1.3.4 — Error `TypeError` en mapa principal
+
+El error reportado sucede en `app.py`, dentro de la llamada a `mapa(...)` con los argumentos `mostrar_circulos_conflicto` y `mostrar_centros_conflicto`. El ZIP v1.3.3 original SÍ contenía una firma de `mapa()` que acepta ambos, por lo que el traceback **no demuestra por sí solo** si hubo mezcla de versiones o si el fallo ocurrió más adentro. Esta edición:
+
+- Valida que `src/visualizacion.py` tenga versión 1.3.4 y que la firma admita todos los argumentos de la interfaz.
+- Presenta un mensaje claro si hay archivos mezclados, en lugar de dejar un `TypeError` en la llamada.
+- Conserva en los logs el detalle de un eventual error interno de tipo durante el renderizado.
+- Mantiene los círculos de empalme, sus centroides, el mapa OSM y los dos modos CVRP.
+- Incluye una prueba automatizada adicional del contrato entre interfaz y visualización.
+
+## Actualización de GitHub
+
+**No mezcles versiones.** Carga el contenido completo de este ZIP en la **raíz de la rama que usa Streamlit Cloud** y reemplaza en particular `app.py`, `src/visualizacion.py`, toda la carpeta `src/`, y `requirements.txt`. Tras el commit, comprueba que la interfaz diga `Paquete integrado 1.3.4`. Si sigue mostrando una versión previa, revisa la rama/archivo de entrada configurado en Streamlit Cloud. En caso de fallo interno, abre `Manage app → Logs` y comparte la última línea de excepción y 2–3 líneas anteriores, ocultando posibles datos sensibles.
+
+---
+
 # Versión integrada 1.3.3: círculos visibles y diagnóstico de TypeError
 
 Esta versión **reúne** la visualización de los círculos de conflicto generados desde los empalmes (versión 1.3.2) con protección de compatibilidad de la interfaz CVRP. Se comprueba el identificador del módulo y la firma efectiva de `bloque_cvrp` antes de ejecutarlo; si el error es interno, se registra el traceback completo en los logs, sin mostrar datos sensibles en la pantalla pública.
